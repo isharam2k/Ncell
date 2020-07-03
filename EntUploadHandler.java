@@ -17,6 +17,8 @@ import org.apache.commons.fileupload.RequestContext;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.apache.commons.io.FileUtils;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -30,6 +32,16 @@ public class EntUploadHandler implements HttpHandler {
 	private static final String FILE_SEPARATOR = "/";
 
 	private static final String TXT = ".txt";
+	
+	private static final String processId = "process_id";
+	
+	private static final String buId = "bu_id";
+	
+	private static final String entityId = "entity_id";
+	
+	private static final String containerId = "container_id";
+	
+	private static final String entityListName = "ent_list_name";
 
 	public EntUploadHandler( String path ) {
 		this.filePath = path;
@@ -38,6 +50,8 @@ public class EntUploadHandler implements HttpHandler {
 	@Override
 	public void handle( HttpExchange t ) throws IOException {
 		System.out.println( "---- Recieved request" );
+		OutputStream os = t.getResponseBody();
+
 		for ( Entry<String, List<String>> header : t.getRequestHeaders().entrySet() ) {
 			System.out.println( header.getKey() + ": " + header.getValue().get( 0 ) );
 		}
@@ -54,7 +68,7 @@ public class EntUploadHandler implements HttpHandler {
 
 				@Override
 				public int getContentLength() {
-					return 0; //tested to work with 0 as return
+					return 0;
 				}
 
 				@Override
@@ -70,7 +84,7 @@ public class EntUploadHandler implements HttpHandler {
 			} );
 			t.getResponseHeaders().add( "Content-type", "text/plain" );
 			t.sendResponseHeaders( 200, 0 );
-			OutputStream os = t.getResponseBody();
+		
 			Map<String, String> tagsMap = new HashMap<String, String>();
 			InputStream inputStream = null;
 			for ( FileItem fi : result ) {
@@ -78,13 +92,14 @@ public class EntUploadHandler implements HttpHandler {
 					String fieldName = fi.getFieldName();
 					String fieldValue = fi.getString();
 					tagsMap.put( fieldName, fieldValue );
-					System.out.println( "filename" + fieldName + "fieldValue" + fieldValue );
 				}
 				else {
 					inputStream = fi.getInputStream();
 				}
 			}
-			writeToDirectory( tagsMap, inputStream );
+			String jsonbody = writeToDirectory( tagsMap, inputStream );
+			os.write( jsonbody.getBytes() );
+			os.flush();
 			os.close();
 
 		}
@@ -93,26 +108,37 @@ public class EntUploadHandler implements HttpHandler {
 		}
 	}
 
-	private void writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException {
+	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException {
 		if ( stream == null ) {
-			return;
+			return "";
 		}
-		String processId = tags.get( "processId" );
-		String buId = tags.get( "buId" );
-		String entityId = tags.get( "entityId" );
-		String entityName = tags.get( "entityListName" );
-		String containerId = tags.get( "containerId" );
+		String processIdtag = tags.get( processId );
+		String buIdtag = tags.get( buId );
+		String entityIdtag = tags.get( entityId);
+		String entityNametag = tags.get( entityListName );
+		String containerIdtag = tags.get( containerId );
 		Random rand = new Random();
 		int number = rand.nextInt( ( 9999999 - 1024 ) + 1 ) + 1024;
 		Date date = new Date();
 		SimpleDateFormat simpleDateFormat = new SimpleDateFormat( "yyyymmdd" );
 		String formatedDate = simpleDateFormat.format( date );
-		String fileName = filePath + FILE_SEPARATOR + entityName + FILENAME_DELIMETER 
-				+ processId + FILENAME_DELIMETER + entityId + FILENAME_DELIMETER 
-				+ containerId + FILENAME_DELIMETER + buId + FILENAME_DELIMETER 
+		String fileName = filePath + FILE_SEPARATOR + entityNametag + FILENAME_DELIMETER 
+				+ processIdtag + FILENAME_DELIMETER + entityIdtag + FILENAME_DELIMETER 
+				+ containerIdtag + FILENAME_DELIMETER + buIdtag + FILENAME_DELIMETER 
 				+ number + FILENAME_DELIMETER + formatedDate + TXT;
 		File file = new File( fileName );
 		FileUtils.copyInputStreamToFile( stream, file );
+		JSONObject entListJson = new JSONObject();
+		try {
+			entListJson.put( "entityListName", entityNametag );
+			entListJson.put( "entityListUid", number );
+		}
+		catch ( JSONException e ) {
+			e.printStackTrace();
+		}
+
+		String ouputResponse = entListJson.toString();
+		return ouputResponse;
 	}
 
 }
