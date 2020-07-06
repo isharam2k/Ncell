@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
-import java.util.regex.Pattern;
 
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.RequestContext;
@@ -61,6 +60,10 @@ public class EntUploadHandler implements HttpHandler {
 	private static final Integer MIN = 1024;
 
 	private String uidFilePath;
+
+	String entityName = "";
+
+	Map<String, String> tagMap = new HashMap<String, String>();
 
 	public EntUploadHandler( String path, String key, String uidFilePath ) {
 		this.filePath = path;
@@ -140,6 +143,40 @@ public class EntUploadHandler implements HttpHandler {
 				os.close();
 				return;
 			}
+			JSONObject errorCode = new JSONObject();
+			errorCode.put( STATUS_RESPONSE, "" );
+			boolean isError = false;
+			if ( !validateEntityName( result ) ) {
+				isError = true;
+				errorCode.put( STATUS_RESPONSE, "Entity Name is improper. Please check!!! " );
+			}
+			if ( !validateProcessId( result ) ) {
+				isError = true;
+				String temp = ( String ) errorCode.get( STATUS_RESPONSE );
+				errorCode.put( STATUS_RESPONSE, temp + " Process id can take only 1,2 or 3.Please check!!" );
+			}
+			if ( !validateEntityId( result ) ) {
+				isError = true;
+				String temp = ( String ) errorCode.get( STATUS_RESPONSE );
+				errorCode.put( STATUS_RESPONSE, temp + " Entity id can take only numeric.Please check!!" );
+			}
+			if ( !validateBuId( result ) ) {
+				isError = true;
+				String temp = ( String ) errorCode.get( STATUS_RESPONSE );
+				errorCode.put( STATUS_RESPONSE, temp + " BU id can take only numeric.Please check!!" );
+			}
+			if ( !containerId( result ) ) {
+				isError = true;
+				String temp = ( String ) errorCode.get( STATUS_RESPONSE );
+				errorCode.put( STATUS_RESPONSE, temp + " Container id can take only 1,2 or 3.Please check!!" );
+			}
+			if ( isError ) {
+				os.write( errorCode.toString().getBytes() );
+				os.flush();
+				os.close();
+				return;
+			}
+
 			for ( FileItem fi : result ) {
 				if ( fi.isFormField() ) {
 					String fieldName = fi.getFieldName();
@@ -160,11 +197,9 @@ public class EntUploadHandler implements HttpHandler {
 		os.close();
 	}
 
-	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException, JSONException {
-		JSONObject entListJson = new JSONObject();
-		if ( stream == null || stream.available() == 0 ) {
-			entListJson.put( STATUS_RESPONSE, "Input file stream is empty" );
-			return entListJson.toString();
+	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException {
+		if ( stream == null ) {
+			return "";
 		}
 		String processIdtag = tags.get( processId );
 		String buIdtag = tags.get( buId );
@@ -182,9 +217,17 @@ public class EntUploadHandler implements HttpHandler {
 		String copiedFilePath = filePath + FILE_SEPARATOR + COPIED_PATH + FILE_SEPARATOR + formedNameForEntList;
 		File copiedFile = new File( copiedFilePath );
 		FileUtils.touch( copiedFile );
-		entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
-		entListJson.put( JSON_ENT_LIST_UID, number );
-		entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
+		JSONObject entListJson = new JSONObject();
+		try {
+			entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
+			entListJson.put( JSON_ENT_LIST_UID, number );
+			entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
+		}
+		catch ( JSONException e ) {
+			System.out.println( "Error occurred while forming JSON response body" );
+			e.printStackTrace();
+		}
+
 		String ouputResponse = entListJson.toString();
 		return ouputResponse;
 	}
@@ -207,7 +250,6 @@ public class EntUploadHandler implements HttpHandler {
 	}
 
 	private boolean validateReq( List<FileItem> result ) {
-		Map<String, String> tagMap = new HashMap<String, String>();
 		if ( result.size() == 6 ) {
 			for ( FileItem item : result ) {
 				if ( item.isFormField() && item.getString().isEmpty() ) {
@@ -218,6 +260,62 @@ public class EntUploadHandler implements HttpHandler {
 			return true;
 		}
 		return false;
+
+	}
+
+	private boolean validateEntityName( List<FileItem> result ) {
+		String patterForName = "^[a-zA-Z0-9 _]*$";
+
+		String entityNametag = tagMap.get( entityListName );
+		if ( entityNametag.matches( patterForName ) ) {
+			return true;
+		}
+		return false;
+
+	}
+
+	private boolean validateProcessId( List<FileItem> result ) {
+		String pattern = "[1-3 ]";
+		String processIdtag = tagMap.get( processId );
+
+		if ( !processIdtag.matches( pattern ) ) {
+			return false;
+		}
+		return true;
+
+	}
+
+	private boolean validateEntityId( List<FileItem> result ) {
+		String pattern = "^[0-9 ]*";
+		String processIdtag = tagMap.get( entityId );
+
+		if ( !processIdtag.matches( pattern ) ) {
+			return false;
+		}
+		return true;
+
+	}
+
+	private boolean validateBuId( List<FileItem> result ) {
+		String pattern = "^[0-9 ]*";
+		String processIdtag = tagMap.get( buId );
+
+		if ( !processIdtag.matches( pattern ) ) {
+			return false;
+		}
+		return true;
+
+	}
+
+	private boolean containerId( List<FileItem> result ) {
+		String pattern = "[1-3 ]";
+		String processIdtag = tagMap.get( containerId );
+
+		if ( !processIdtag.matches( pattern ) ) {
+			return false;
+		}
+		return true;
+
 	}
 
 }
