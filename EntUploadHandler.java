@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
+import java.util.regex.Pattern;
 
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.RequestContext;
@@ -54,9 +55,9 @@ public class EntUploadHandler implements HttpHandler {
 	private static final String JSON_ENT_LIST_UID = "entityListUid";
 
 	private static final String STATUS_RESPONSE = "statusResponse";
-	
+
 	private static final Integer MAX = 9999999;
-	
+
 	private static final Integer MIN = 1024;
 
 	private String uidFilePath;
@@ -159,9 +160,11 @@ public class EntUploadHandler implements HttpHandler {
 		os.close();
 	}
 
-	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException {
-		if ( stream == null ) {
-			return "";
+	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException, JSONException {
+		JSONObject entListJson = new JSONObject();
+		if ( stream == null || stream.available() == 0 ) {
+			entListJson.put( STATUS_RESPONSE, "Input file stream is empty" );
+			return entListJson.toString();
 		}
 		String processIdtag = tags.get( processId );
 		String buIdtag = tags.get( buId );
@@ -179,17 +182,9 @@ public class EntUploadHandler implements HttpHandler {
 		String copiedFilePath = filePath + FILE_SEPARATOR + COPIED_PATH + FILE_SEPARATOR + formedNameForEntList;
 		File copiedFile = new File( copiedFilePath );
 		FileUtils.touch( copiedFile );
-		JSONObject entListJson = new JSONObject();
-		try {
-			entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
-			entListJson.put( JSON_ENT_LIST_UID, number );
-			entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
-		}
-		catch ( JSONException e ) {
-			System.out.println( "Error occurred while forming JSON response body" );
-			e.printStackTrace();
-		}
-
+		entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
+		entListJson.put( JSON_ENT_LIST_UID, number );
+		entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
 		String ouputResponse = entListJson.toString();
 		return ouputResponse;
 	}
@@ -212,9 +207,13 @@ public class EntUploadHandler implements HttpHandler {
 	}
 
 	private boolean validateReq( List<FileItem> result ) {
+		Map<String, String> tagMap = new HashMap<String, String>();
 		if ( result.size() == 6 ) {
-			for(FileItem item : result) {
-				
+			for ( FileItem item : result ) {
+				if ( item.isFormField() && item.getString().isEmpty() ) {
+					return false;
+				}
+				tagMap.put( item.getFieldName(), item.getString() );
 			}
 			return true;
 		}
