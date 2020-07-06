@@ -54,6 +54,10 @@ public class EntUploadHandler implements HttpHandler {
 	private static final String JSON_ENT_LIST_UID = "entityListUid";
 
 	private static final String STATUS_RESPONSE = "statusResponse";
+	
+	private static final Integer MAX = 9999999;
+	
+	private static final Integer MIN = 1024;
 
 	private String uidFilePath;
 
@@ -65,66 +69,10 @@ public class EntUploadHandler implements HttpHandler {
 
 	@Override
 	public void handle( HttpExchange t ) throws IOException {
-
 		String inputKey = t.getRequestHeaders().get( "AuthorizedToken" ).toString().replaceAll( "\\p{P}", "" );
 		OutputStream os = t.getResponseBody();
-		if ( inputKey.equals( key ) ) {
-
-			System.out.println( "---- Recieved request" );
-
-			for ( Entry<String, List<String>> header : t.getRequestHeaders().entrySet() ) {
-				System.out.println( header.getKey() + ": " + header.getValue().get( 0 ) );
-			}
-			DiskFileItemFactory d = new DiskFileItemFactory();
-
-			try {
-				ServletFileUpload up = new ServletFileUpload( d );
-				List<FileItem> result = up.parseRequest( new RequestContext() {
-
-					@Override
-					public String getCharacterEncoding() {
-						return "UTF-8";
-					}
-
-					@Override
-					public int getContentLength() {
-						return 0;
-					}
-
-					@Override
-					public String getContentType() {
-						return t.getRequestHeaders().getFirst( "Content-type" );
-					}
-
-					@Override
-					public InputStream getInputStream() throws IOException {
-						return t.getRequestBody();
-					}
-
-				} );
-				t.getResponseHeaders().add( "Content-type", "text/plain" );
-				t.sendResponseHeaders( 200, 0 );
-
-				Map<String, String> tagsMap = new HashMap<String, String>();
-				InputStream inputStream = null;
-				for ( FileItem fi : result ) {
-					if ( fi.isFormField() ) {
-						String fieldName = fi.getFieldName();
-						String fieldValue = fi.getString();
-						tagsMap.put( fieldName, fieldValue );
-					}
-					else {
-						inputStream = fi.getInputStream();
-					}
-				}
-				String jsonbody = writeToDirectory( tagsMap, inputStream );
-				os.write( jsonbody.getBytes() );
-			}
-			catch ( Exception e ) {
-				e.printStackTrace();
-			}
-		}
-		else {
+		t.getResponseHeaders().add( "Content-type", "application/json" );
+		if ( !inputKey.equals( key ) ) {
 			String code = "Authorization Failed";
 			JSONObject entListJson = new JSONObject();
 			try {
@@ -134,10 +82,78 @@ public class EntUploadHandler implements HttpHandler {
 				System.out.println( "Error occurred while forming JSON response body" );
 				e.printStackTrace();
 			}
-			t.getResponseHeaders().add( "Content-type", "text/plain" );
 			t.sendResponseHeaders( 400, 0 );
 			String outpusRes = entListJson.toString();
 			os.write( outpusRes.getBytes() );
+			os.flush();
+			os.close();
+			return;
+		}
+
+		System.out.println( "---- Serving request " );
+		for ( Entry<String, List<String>> header : t.getRequestHeaders().entrySet() ) {
+			System.out.println( header.getKey() + ": " + header.getValue().get( 0 ) );
+		}
+		DiskFileItemFactory d = new DiskFileItemFactory();
+
+		try {
+			ServletFileUpload up = new ServletFileUpload( d );
+			List<FileItem> result = up.parseRequest( new RequestContext() {
+
+				@Override
+				public String getCharacterEncoding() {
+					return "UTF-8";
+				}
+
+				@Override
+				public int getContentLength() {
+					return 0;
+				}
+
+				@Override
+				public String getContentType() {
+					return t.getRequestHeaders().getFirst( "Content-type" );
+				}
+
+				@Override
+				public InputStream getInputStream() throws IOException {
+					return t.getRequestBody();
+				}
+
+			} );
+			t.sendResponseHeaders( 200, 0 );
+
+			Map<String, String> tagsMap = new HashMap<String, String>();
+			InputStream inputStream = null;
+			if ( !validateReq( result ) ) {
+				JSONObject entListJson = new JSONObject();
+				try {
+					entListJson.put( STATUS_RESPONSE, "Please check the parameters passed...Invalid parameters passed" );
+				}
+				catch ( JSONException e ) {
+					System.out.println( "Error occurred while forming JSON response body" );
+					e.printStackTrace();
+				}
+				os.write( entListJson.toString().getBytes() );
+				os.flush();
+				os.close();
+				return;
+			}
+			for ( FileItem fi : result ) {
+				if ( fi.isFormField() ) {
+					String fieldName = fi.getFieldName();
+					String fieldValue = fi.getString();
+					tagsMap.put( fieldName, fieldValue );
+				}
+				else {
+					inputStream = fi.getInputStream();
+				}
+			}
+			String jsonbody = writeToDirectory( tagsMap, inputStream );
+			os.write( jsonbody.getBytes() );
+		}
+		catch ( Exception e ) {
+			e.printStackTrace();
 		}
 		os.flush();
 		os.close();
@@ -167,6 +183,7 @@ public class EntUploadHandler implements HttpHandler {
 		try {
 			entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
 			entListJson.put( JSON_ENT_LIST_UID, number );
+			entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
 		}
 		catch ( JSONException e ) {
 			System.out.println( "Error occurred while forming JSON response body" );
@@ -179,9 +196,9 @@ public class EntUploadHandler implements HttpHandler {
 
 	private Integer generateRandomNumber() throws IOException {
 		Random rand = new Random();
-		Integer number = rand.nextInt( ( 9999999 - 1024 ) + 1 ) + 1024;
+		Integer number = rand.nextInt( ( MAX - MIN ) + 1 ) + MIN;
 		if ( EntListUidLookUp.getInstance().checkForUid( number.toString() ) ) {
-			number = rand.nextInt( ( 9999999 - 1025 ) + 1 ) + 1025;
+			number = rand.nextInt( ( MAX - MIN ) + 1 ) + MIN;
 		}
 		EntListUidLookUp.getInstance().add( number.toString() );
 		File uidfile = new File( uidFilePath );
@@ -192,6 +209,16 @@ public class EntUploadHandler implements HttpHandler {
 		pw.close();
 		fw.close();
 		return number;
+	}
+
+	private boolean validateReq( List<FileItem> result ) {
+		if ( result.size() == 6 ) {
+			for(FileItem item : result) {
+				
+			}
+			return true;
+		}
+		return false;
 	}
 
 }
