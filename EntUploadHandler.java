@@ -197,9 +197,11 @@ public class EntUploadHandler implements HttpHandler {
 		os.close();
 	}
 
-	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException {
-		if ( stream == null ) {
-			return "";
+	private String writeToDirectory( Map<String, String> tags, InputStream stream ) throws IOException, JSONException {
+		JSONObject entListJson = new JSONObject();
+		if ( stream == null || stream.available() == 0 ) {
+			entListJson.put( STATUS_RESPONSE, "Input file stream is empty" );
+			return entListJson.toString();
 		}
 		String processIdtag = tags.get( processId );
 		String buIdtag = tags.get( buId );
@@ -217,17 +219,9 @@ public class EntUploadHandler implements HttpHandler {
 		String copiedFilePath = filePath + FILE_SEPARATOR + COPIED_PATH + FILE_SEPARATOR + formedNameForEntList;
 		File copiedFile = new File( copiedFilePath );
 		FileUtils.touch( copiedFile );
-		JSONObject entListJson = new JSONObject();
-		try {
-			entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
-			entListJson.put( JSON_ENT_LIST_UID, number );
-			entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
-		}
-		catch ( JSONException e ) {
-			System.out.println( "Error occurred while forming JSON response body" );
-			e.printStackTrace();
-		}
-
+		entListJson.put( JSON_ENT_LIST_NAME, entityNametag );
+		entListJson.put( JSON_ENT_LIST_UID, number );
+		entListJson.put( STATUS_RESPONSE, "Succesfully added file to process" );
 		String ouputResponse = entListJson.toString();
 		return ouputResponse;
 	}
@@ -275,7 +269,7 @@ public class EntUploadHandler implements HttpHandler {
 	}
 
 	private boolean validateProcessId( List<FileItem> result ) {
-		String pattern = "[1-3 ]";
+		String pattern = "[1-3]";
 		String processIdtag = tagMap.get( processId );
 
 		if ( !processIdtag.matches( pattern ) ) {
@@ -286,7 +280,7 @@ public class EntUploadHandler implements HttpHandler {
 	}
 
 	private boolean validateEntityId( List<FileItem> result ) {
-		String pattern = "^[0-9 ]*";
+		String pattern = "^[0-9]*";
 		String processIdtag = tagMap.get( entityId );
 
 		if ( !processIdtag.matches( pattern ) ) {
@@ -297,7 +291,7 @@ public class EntUploadHandler implements HttpHandler {
 	}
 
 	private boolean validateBuId( List<FileItem> result ) {
-		String pattern = "^[0-9 ]*";
+		String pattern = "^[0-9]*";
 		String processIdtag = tagMap.get( buId );
 
 		if ( !processIdtag.matches( pattern ) ) {
@@ -308,9 +302,9 @@ public class EntUploadHandler implements HttpHandler {
 	}
 
 	private boolean containerId( List<FileItem> result ) {
-		String pattern = "[1-3 ]";
+		String pattern = "[1-3]";
 		String processIdtag = tagMap.get( containerId );
-
+			
 		if ( !processIdtag.matches( pattern ) ) {
 			return false;
 		}
